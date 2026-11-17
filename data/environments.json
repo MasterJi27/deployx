@@ -1,0 +1,58 @@
+{
+  "rollout": {
+    "canary": { "steps": [10, 50, 100], "soakSec": 3, "standbySec": 0.8, "errorBudgetPct": 2, "baselinePct": 0.2 },
+    "bluegreen": { "soakSec": 2, "standbySec": 1.2, "errorBudgetPct": 2, "baselinePct": 0.2 }
+  },
+  "environments": [
+    {
+      "id": "development",
+      "name": "Development",
+      "code": "D",
+      "line": "blue",
+      "simulated": true,
+      "url": "https://dev.storefront.example",
+      "region": "ap-south-1",
+      "replicas": 1,
+      "strategy": "Recreate",
+      "approval": "None, deploys on every push",
+      "durationFactor": 0.8,
+      "requiresConfirmation": false,
+      "description": "Fast feedback for work in progress. Smallest footprint, quickest runs."
+    },
+    {
+      "id": "staging",
+      "name": "Staging",
+      "code": "S",
+      "line": "orange",
+      "simulated": true,
+      "url": "https://staging.storefront.example",
+      "region": "ap-south-1",
+      "replicas": 2,
+      "strategy": "Rolling update",
+      "approval": "Automatic after tests pass",
+      "durationFactor": 1.0,
+      "requiresConfirmation": false,
+      "description": "A production-like rehearsal where releases are verified before going live."
+    },
+    {
+      "id": "production",
+      "name": "Production",
+      "code": "P",
+      "line": "green",
+      "simulated": true,
+      "url": "https://www.storefront.example",
+      "region": "ap-south-1 + eu-west-1",
+      "replicas": 4,
+      "strategy": "Canary",
+      "approval": "2 reviewers must approve (never the author)",
+      "gate": {
+        "required": 2,
+        "timeoutSec": 90,
+        "approvers": ["Priya Nair", "Sara Khan", "Arjun Mehta", "Dev Patel"]
+      },
+      "durationFactor": 1.25,
+      "requiresConfirmation": true,
+      "description": "The live service. Slowest, most careful rollout, protected by an approval gate."
+    }
+  ]
+}

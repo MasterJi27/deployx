@@ -1,0 +1,164 @@
+{
+  "stages": [
+    {
+      "id": "lint",
+      "code": "L",
+      "name": "Lint & Format",
+      "short": "Lint",
+      "description": "Static style and correctness checks that fail fast, before anything expensive runs.",
+      "duration": { "min": 900, "max": 1500 },
+      "ci": {
+        "steps": [
+          { "name": "Set up Node.js", "uses": "actions/setup-node@v4", "with": { "node-version": "20", "cache": "npm" } },
+          { "name": "Install dependencies", "run": "npm ci" },
+          { "name": "Lint", "run": "npm run lint" }
+        ]
+      },
+      "steps": [
+        { "level": "info", "message": "Running linters." },
+        { "level": "dim", "message": "ESLint: 0 errors, 3 warnings." },
+        { "level": "dim", "message": "Prettier: formatting verified." },
+        { "level": "success", "message": "Lint passed." }
+      ],
+      "failure": {
+        "code": "LINT_ERRORS",
+        "message": "Lint failed: 4 errors in src/.",
+        "details": ["src/cart/total.js 22:5 error 'taxRate' is assigned a value but never used", "src/api/search.js 8:1 error Unexpected console statement"],
+        "hint": "Fix the reported errors or adjust the rule, then retry."
+      }
+    },
+    {
+      "id": "e2e",
+      "code": "E",
+      "name": "End-to-End Tests",
+      "short": "E2E",
+      "description": "A real browser walks through the main user journeys against the built application.",
+      "duration": { "min": 3200, "max": 4600 },
+      "ci": {
+        "steps": [
+          { "name": "Set up Node.js", "uses": "actions/setup-node@v4", "with": { "node-version": "20", "cache": "npm" } },
+          { "name": "Install dependencies", "run": "npm ci" },
+          { "name": "Install browsers", "run": "npx playwright install --with-deps" },
+          { "name": "Run end-to-end tests", "run": "npx playwright test" }
+        ]
+      },
+      "steps": [
+        { "level": "info", "message": "Starting end-to-end tests." },
+        { "level": "dim", "message": "Launching headless browser." },
+        { "level": "dim", "message": "Journey: browse → add to cart → checkout ✓" },
+        { "level": "dim", "message": "Journey: sign in → order history ✓" },
+        { "level": "success", "message": "12 of 12 journeys passed." }
+      ],
+      "failure": {
+        "code": "E2E_TIMEOUT",
+        "message": "End-to-end test timed out waiting for '#order-confirmation'.",
+        "details": ["Journey: browse → add to cart → checkout", "Timeout 10000ms exceeded", "Screenshot saved to artifacts/checkout-failure.png"],
+        "hint": "Check the screenshot and the page state at the failing step, then retry."
+      }
+    },
+    {
+      "id": "license",
+      "code": "I",
+      "name": "License Audit",
+      "short": "Licenses",
+      "description": "Checks that every dependency's license is allowed by company policy.",
+      "duration": { "min": 1200, "max": 2000 },
+      "ci": {
+        "steps": [
+          { "name": "Install dependencies", "run": "npm ci" },
+          { "name": "Check licenses", "run": "npx license-checker --onlyAllow 'MIT;ISC;Apache-2.0;BSD-3-Clause'" }
+        ]
+      },
+      "steps": [
+        { "level": "info", "message": "Auditing dependency licenses." },
+        { "level": "dim", "message": "842 packages scanned." },
+        { "level": "dim", "message": "Allowed: MIT, ISC, Apache-2.0, BSD-3-Clause." },
+        { "level": "success", "message": "License audit passed." }
+      ],
+      "failure": {
+        "code": "LICENSE_DISALLOWED",
+        "message": "License audit failed: 1 package uses a disallowed license.",
+        "details": ["fancy-charts@2.1.0 — AGPL-3.0", "Policy: only permissive licenses are allowed"],
+        "hint": "Replace the package or request a policy exception, then retry."
+      }
+    },
+    {
+      "id": "perf",
+      "code": "P",
+      "name": "Performance Test",
+      "short": "Perf",
+      "description": "A short load test checks response times and error rates against the agreed budget.",
+      "duration": { "min": 3000, "max": 4200 },
+      "ci": {
+        "steps": [
+          { "name": "Install k6", "uses": "grafana/setup-k6-action@v1" },
+          { "name": "Run load test", "run": "k6 run tests/load.js" }
+        ]
+      },
+      "steps": [
+        { "level": "info", "message": "Starting load test (50 virtual users, 30s)." },
+        { "level": "dim", "message": "p95 latency: 212 ms (budget 300 ms)." },
+        { "level": "dim", "message": "Error rate: 0.1% (budget 1%)." },
+        { "level": "success", "message": "Performance budget met." }
+      ],
+      "failure": {
+        "code": "PERF_BUDGET_EXCEEDED",
+        "message": "Performance budget exceeded: p95 latency 486 ms (budget 300 ms).",
+        "details": ["GET /api/search — p95 612 ms", "Slowest endpoint is the new search query"],
+        "hint": "Profile the slow endpoint or raise the budget deliberately, then retry."
+      }
+    },
+    {
+      "id": "migrate",
+      "code": "M",
+      "name": "Database Migration",
+      "short": "Migrate",
+      "description": "Schema changes are applied to the target database before the new release starts.",
+      "duration": { "min": 1500, "max": 2400 },
+      "ci": {
+        "steps": [
+          { "name": "Install dependencies", "run": "npm ci" },
+          { "name": "Run migrations", "run": "npm run db:migrate" }
+        ]
+      },
+      "steps": [
+        { "level": "info", "message": "Connecting to {env} database." },
+        { "level": "dim", "message": "2 pending migrations found." },
+        { "level": "cmd", "message": "$ npm run db:migrate" },
+        { "level": "success", "message": "Migrations applied." }
+      ],
+      "failure": {
+        "code": "MIGRATION_LOCK_TIMEOUT",
+        "message": "Migration failed: could not acquire schema lock within 30s.",
+        "details": ["ALTER TABLE orders ADD COLUMN gift_note text", "Blocked by a long-running transaction"],
+        "hint": "Wait for the blocking transaction or run the migration off-peak, then retry."
+      }
+    },
+    {
+      "id": "smoke",
+      "code": "K",
+      "name": "Smoke Test",
+      "short": "Smoke",
+      "description": "A few quick checks against the live environment confirm the release actually works. Best placed after Deployment.",
+      "duration": { "min": 1200, "max": 1900 },
+      "ci": {
+        "steps": [
+          { "name": "Check home page", "run": "curl --fail --silent https://staging.storefront.example/" },
+          { "name": "Check health endpoint", "run": "curl --fail --silent https://staging.storefront.example/healthz" }
+        ]
+      },
+      "steps": [
+        { "level": "info", "message": "Running smoke tests against {env}." },
+        { "level": "dim", "message": "GET {url}/ → 200" },
+        { "level": "dim", "message": "GET {url}/healthz → 200" },
+        { "level": "success", "message": "Smoke tests passed." }
+      ],
+      "failure": {
+        "code": "SMOKE_CHECK_FAILED",
+        "message": "Smoke test failed: GET /checkout returned 500.",
+        "details": ["Expected status 200, received 500", "The new release is live but not working"],
+        "hint": "Roll back the environment, then fix the checkout error."
+      }
+    }
+  ]
+}

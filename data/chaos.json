@@ -1,0 +1,139 @@
+{
+  "intensity": {
+    "calm": { "label": "Calm", "minSec": 45, "maxSec": 90 },
+    "normal": { "label": "Normal", "minSec": 25, "maxSec": 50 },
+    "wild": { "label": "Wild", "minSec": 12, "maxSec": 25 }
+  },
+  "parSec": 20,
+  "defaultWrong": "That did not address the cause, so the problem carries on.",
+  "actions": [
+    { "id": "rollback", "label": "Roll back", "hint": "Return to the previous build", "icon": "rollback", "durationMs": 0 },
+    { "id": "restart", "label": "Restart pods", "hint": "Recycle the running pods", "icon": "retry", "durationMs": 2200 },
+    { "id": "scale", "label": "Scale up", "hint": "Add more replicas", "icon": "up", "durationMs": 2600 },
+    { "id": "fallback", "label": "Enable fallback", "hint": "Circuit breaker and cached responses", "icon": "alert", "durationMs": 2000 },
+    { "id": "rotate", "label": "Rotate certificate", "hint": "Issue and install a new one", "icon": "settings", "durationMs": 2400 },
+    { "id": "wait", "label": "Wait and watch", "hint": "Keep observing the dashboards", "icon": "history", "durationMs": 0 }
+  ],
+  "incidents": [
+    {
+      "id": "bad-release",
+      "title": "Errors spiked right after the latest release",
+      "severity": "High",
+      "needsRelease": true,
+      "symptoms": [
+        "Error rate jumped from about 0.2% to more than 7% within a minute.",
+        "Most failures are HTTP 500 from the application itself.",
+        "Latency and CPU look normal."
+      ],
+      "evidence": ["{env} last deployed {commit} {ago}.", "Traffic is normal and there are no infrastructure alerts."],
+      "peak": { "err": 7.4, "lat": 260 },
+      "fixes": ["rollback"],
+      "fixText": "Returned {env} to the previous build. Errors fall back to normal.",
+      "wrong": {
+        "restart": "Restarting loads the same broken code, so the errors come straight back.",
+        "scale": "More replicas of a broken release just produce more errors.",
+        "fallback": "The failing code is our own, not a dependency, so a fallback changes nothing.",
+        "rotate": "Certificates and credentials are fine. The trouble started with the deploy.",
+        "wait": "Errors keep burning the error budget. A bad release does not fix itself."
+      },
+      "explanation": "The last deploy introduced a defect. Everything else about the service was normal, and the timing lines up with the deploy.",
+      "lesson": "When trouble starts right after a release, roll back first and investigate afterwards. Mitigate before you diagnose."
+    },
+    {
+      "id": "memory-leak",
+      "title": "Pods keep restarting and memory keeps climbing",
+      "severity": "Medium",
+      "needsRelease": false,
+      "symptoms": [
+        "Pods restart every few minutes with OOMKilled.",
+        "Memory grows steadily between restarts.",
+        "Requests fail briefly each time a pod dies."
+      ],
+      "evidence": ["Memory use grows about 40 MB per minute.", "Traffic is normal and nothing was changed today."],
+      "peak": { "err": 4.2, "lat": 520 },
+      "fixes": ["restart"],
+      "fixText": "Recycled the pods. Memory is back to normal for now, but the leak is still in the code.",
+      "wrong": {
+        "rollback": "No recent deploy changed anything, so the previous build leaks too. (Simulated: nothing was rolled back.)",
+        "scale": "More replicas leak as well. They just run out of memory at different times.",
+        "fallback": "A fallback does not stop pods running out of memory.",
+        "rotate": "Credentials are not the problem here.",
+        "wait": "The pods keep dying and every restart drops requests."
+      },
+      "explanation": "A slow memory leak makes pods hit their limit and get killed. Nothing external changed.",
+      "lesson": "A restart is mitigation, not a fix. Schedule the real fix and add a memory alert so it does not page you again."
+    },
+    {
+      "id": "traffic-spike",
+      "title": "Traffic is four times normal and latency is climbing",
+      "severity": "High",
+      "needsRelease": false,
+      "symptoms": [
+        "Requests per second are about 4x the usual level.",
+        "CPU is above 90% on every pod.",
+        "Latency is rising and some requests time out."
+      ],
+      "evidence": ["No deploys in the last two days.", "Errors rise only because requests are queueing."],
+      "peak": { "err": 3.1, "lat": 1400 },
+      "fixes": ["scale"],
+      "fixText": "Added replicas. Load spreads out and latency drops.",
+      "wrong": {
+        "rollback": "Nothing changed in the code, so rolling back would not reduce the load. (Simulated: nothing was rolled back.)",
+        "restart": "Restarting removes capacity at exactly the wrong moment.",
+        "fallback": "Fallbacks help with failing dependencies, not with too much load.",
+        "rotate": "This is not a certificate or credential problem.",
+        "wait": "Load is not going away, and users are waiting while the budget burns."
+      },
+      "explanation": "Demand outgrew capacity. The pods themselves are healthy, they are just overloaded.",
+      "lesson": "Match capacity to load. Autoscaling and regular load tests make this a non-event."
+    },
+    {
+      "id": "dependency-down",
+      "title": "Checkout is failing because the payment provider is down",
+      "severity": "High",
+      "needsRelease": false,
+      "symptoms": [
+        "Calls to the payments API time out after 5 seconds.",
+        "Only the checkout path fails; browsing works.",
+        "Our pods look healthy: CPU and memory are normal."
+      ],
+      "evidence": ["The provider's status page reports an incident.", "No deploys and no traffic change."],
+      "peak": { "err": 5.6, "lat": 4800 },
+      "fixes": ["fallback"],
+      "fixText": "Switched checkout to the fallback: orders are queued and confirmed later. Customers can check out again.",
+      "wrong": {
+        "rollback": "The failure is outside our code, so the previous build fails the same way. (Simulated: nothing was rolled back.)",
+        "restart": "Restarting your pods does not bring the provider back.",
+        "scale": "More replicas just make more doomed calls.",
+        "rotate": "Our credentials are fine. The provider is the one that is down.",
+        "wait": "Customers cannot pay while you wait. A fallback lets them keep buying."
+      },
+      "explanation": "A third party failed. Our own service was healthy but depended on it.",
+      "lesson": "Design for dependencies failing: timeouts, circuit breakers and fallbacks turn an outage into a degraded service."
+    },
+    {
+      "id": "cert-expiry",
+      "title": "Browsers reject the site: the TLS certificate expired",
+      "severity": "Critical",
+      "needsRelease": false,
+      "symptoms": [
+        "Browsers show a security warning and refuse to connect.",
+        "Every external request fails the TLS handshake.",
+        "Internal health checks still pass."
+      ],
+      "evidence": ["The certificate expired a few minutes ago.", "No deploys and no config changes."],
+      "peak": { "err": 9, "lat": 300 },
+      "fixes": ["rotate"],
+      "fixText": "Issued and installed a new certificate. Handshakes succeed again.",
+      "wrong": {
+        "rollback": "The previous build has the same expired certificate. (Simulated: nothing was rolled back.)",
+        "restart": "Restarting reloads the same expired certificate.",
+        "scale": "More replicas present the same expired certificate.",
+        "fallback": "No dependency failed. The certificate itself is invalid.",
+        "wait": "Certificates do not renew themselves once they have expired."
+      },
+      "explanation": "The certificate reached its expiry date. The application and infrastructure were otherwise fine.",
+      "lesson": "Automate certificate renewal and alert weeks before expiry, not minutes after."
+    }
+  ]
+}

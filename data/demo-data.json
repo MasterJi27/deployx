@@ -1,0 +1,30 @@
+{
+  "repository": {
+    "name": "acme/storefront-web",
+    "provider": "Git (simulated)",
+    "defaultBranch": "main",
+    "language": "JavaScript",
+    "description": "Demo storefront application used by the DeployX simulator."
+  },
+  "branches": ["main", "develop", "feature/checkout-v2", "hotfix/cart-total"],
+  "commits": [
+    { "hash": "a3f9c21e7b4d", "message": "Add order summary to checkout", "author": "Priya Nair" },
+    { "hash": "7d2e4b90c1af", "message": "Fix cart total rounding", "author": "Arjun Mehta" },
+    { "hash": "c81b05fe3a62", "message": "Upgrade payment SDK to 4.2", "author": "Sara Khan" },
+    { "hash": "19e6ad47f0b8", "message": "Lazy-load product gallery images", "author": "Dev Patel" },
+    { "hash": "f04c7a3d915e", "message": "Add rate limiting to search API", "author": "Priya Nair" },
+    { "hash": "5b9a2e8c6d13", "message": "Refactor inventory service client", "author": "Arjun Mehta" },
+    { "hash": "e27f1c64b8a0", "message": "Improve empty cart messaging", "author": "Sara Khan" },
+    { "hash": "8c40d9b17e5f", "message": "Cache category navigation", "author": "Dev Patel" }
+  ],
+  "seedHistory": [
+    { "minutesAgo": 42, "commit": 7, "branch": "main", "environment": "production", "status": "success", "durationMs": 16400 },
+    { "minutesAgo": 185, "commit": 6, "branch": "develop", "environment": "staging", "status": "success", "durationMs": 13900 },
+    { "minutesAgo": 410, "commit": 5, "branch": "feature/checkout-v2", "environment": "development", "status": "failed", "failedStage": "test", "durationMs": 7800 },
+    { "minutesAgo": 1490, "commit": 4, "branch": "main", "environment": "production", "status": "success", "durationMs": 17100 },
+    { "minutesAgo": 1720, "commit": 3, "branch": "develop", "environment": "staging", "status": "failed", "failedStage": "security", "durationMs": 10200 },
+    { "minutesAgo": 2950, "commit": 2, "branch": "main", "environment": "staging", "status": "success", "durationMs": 13200 },
+    { "minutesAgo": 4380, "commit": 1, "branch": "hotfix/cart-total", "environment": "production", "status": "success", "durationMs": 15800 },
+    { "minutesAgo": 5800, "commit": 0, "branch": "develop", "environment": "development", "status": "success", "durationMs": 10900 }
+  ]
+}

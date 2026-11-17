@@ -1,0 +1,194 @@
+{
+  "pipeline": {
+    "id": "deployx-main",
+    "name": "DeployX Main Line",
+    "trigger": "Push to branch",
+    "version": "1.0.0",
+    "simulated": true,
+    "terminus": "Production"
+  },
+  "stages": [
+    {
+      "id": "git",
+      "code": "G",
+      "name": "Git Repository",
+      "short": "Git Push",
+      "description": "A push event arrives from source control and the pipeline is triggered.",
+      "duration": { "min": 1100, "max": 1700 },
+      "ci": { "trigger": true },
+      "steps": [
+        { "level": "info", "message": "Initializing pipeline {id} for {repo}..." },
+        { "level": "info", "message": "Push event received on {branch} ({commit})." },
+        { "level": "dim", "message": "Webhook signature verified." },
+        { "level": "success", "message": "Source repository initialized." }
+      ],
+      "failure": {
+        "code": "GIT_WEBHOOK_REJECTED",
+        "message": "Push event rejected: webhook signature did not match.",
+        "details": ["remote: HTTP 401 while validating delivery", "Pipeline trigger aborted before checkout."],
+        "hint": "Rotate the webhook secret in the repository settings, then retry."
+      }
+    },
+    {
+      "id": "checkout",
+      "code": "C",
+      "name": "Source Checkout",
+      "short": "Checkout",
+      "description": "The runner clones the repository and checks out the exact commit to build.",
+      "duration": { "min": 1200, "max": 1900 },
+      "ci": { "steps": [{ "name": "Check out source", "uses": "actions/checkout@v4" }] },
+      "steps": [
+        { "level": "info", "message": "Checking out latest commit {commit}." },
+        { "level": "cmd", "message": "$ git fetch origin {branch} --depth=1" },
+        { "level": "dim", "message": "Commit: \"{message}\" by {author}" },
+        { "level": "success", "message": "Workspace prepared (1,284 files)." }
+      ],
+      "failure": {
+        "code": "CHECKOUT_REF_NOT_FOUND",
+        "message": "fatal: reference {commit} is not a tree.",
+        "details": ["The commit was not found on origin/{branch}.", "Shallow clone could not resolve the requested ref."],
+        "hint": "Confirm the branch was pushed and the commit still exists, then retry."
+      }
+    },
+    {
+      "id": "build",
+      "code": "B",
+      "name": "Build",
+      "short": "Build",
+      "description": "Dependencies are restored and the application is compiled into a deployable image.",
+      "duration": { "min": 2400, "max": 3600 },
+      "ci": {
+        "steps": [
+          { "name": "Set up Node.js", "uses": "actions/setup-node@v4", "with": { "node-version": "20", "cache": "npm" } },
+          { "name": "Install dependencies", "run": "npm ci" },
+          { "name": "Build", "run": "npm run build" },
+          { "name": "Upload build output", "uses": "actions/upload-artifact@v4", "with": { "name": "dist", "path": "dist/" } }
+        ]
+      },
+      "steps": [
+        { "level": "info", "message": "Restoring dependency cache." },
+        { "level": "success", "message": "Dependencies validated ({deps} packages)." },
+        { "level": "cmd", "message": "$ npm run build" },
+        { "level": "dim", "message": "Compiling application bundle (412 modules)." },
+        { "level": "dim", "message": "Image tagged storefront-web:{commit}" },
+        { "level": "success", "message": "Build completed successfully." }
+      ],
+      "failure": {
+        "code": "BUILD_COMPILE_ERROR",
+        "message": "Build failed: Module not found: Can't resolve './CheckoutSummary'.",
+        "details": ["at src/pages/checkout/index.js:14:1", "npm ERR! code ELIFECYCLE · exit status 1"],
+        "hint": "Fix the import path or restore the missing file, then retry."
+      }
+    },
+    {
+      "id": "test",
+      "code": "T",
+      "name": "Automated Testing",
+      "short": "Testing",
+      "parallel": "verify",
+      "description": "Unit and integration suites run against the build, alongside the security scan. Any failing test stops the line.",
+      "duration": { "min": 2400, "max": 3500 },
+      "ci": {
+        "steps": [
+          { "name": "Set up Node.js", "uses": "actions/setup-node@v4", "with": { "node-version": "20", "cache": "npm" } },
+          { "name": "Install dependencies", "run": "npm ci" },
+          { "name": "Unit tests", "run": "npm test -- --coverage" },
+          { "name": "Integration tests", "run": "npm run test:integration" }
+        ]
+      },
+      "steps": [
+        { "level": "info", "message": "Running automated tests." },
+        { "level": "dim", "message": "Unit suite: {unit} passed." },
+        { "level": "dim", "message": "Integration suite: {integration} passed." },
+        { "level": "dim", "message": "Coverage 87.4% (threshold 80%)." },
+        { "level": "success", "message": "All tests passed." }
+      ],
+      "failure": {
+        "code": "TEST_ASSERTION_FAILED",
+        "message": "2 tests failed in cart/pricing.spec.js.",
+        "details": ["✕ applies percentage discount before tax — expected 107.99, received 119.99", "✕ rounds totals to two decimals — expected 12.35, received 12.345"],
+        "hint": "Fix the failing assertions or the pricing logic, then retry."
+      }
+    },
+    {
+      "id": "security",
+      "code": "S",
+      "name": "Security Scan",
+      "short": "Security",
+      "parallel": "verify",
+      "description": "Dependencies, source and secrets are scanned alongside the tests. High-severity findings block deployment.",
+      "duration": { "min": 2000, "max": 3000 },
+      "ci": {
+        "steps": [
+          { "name": "Dependency audit", "run": "npm audit --audit-level=high" },
+          { "name": "Static analysis", "uses": "github/codeql-action/init@v3", "with": { "languages": "javascript" } },
+          { "name": "Analyze", "uses": "github/codeql-action/analyze@v3" }
+        ]
+      },
+      "steps": [
+        { "level": "info", "message": "Running security scan." },
+        { "level": "dim", "message": "Dependency audit: 0 critical, 0 high." },
+        { "level": "dim", "message": "Static analysis: no issues found." },
+        { "level": "dim", "message": "Secret detection: clean." },
+        { "level": "success", "message": "Security scan completed." }
+      ],
+      "failure": {
+        "code": "SEC_HIGH_SEVERITY_FOUND",
+        "message": "Security gate failed: 1 high-severity vulnerability found.",
+        "details": ["lodash@4.17.15 — prototype pollution (simulated advisory)", "Policy: block on severity >= high"],
+        "hint": "Upgrade the affected package to a patched version, then retry."
+      }
+    },
+    {
+      "id": "approval",
+      "code": "A",
+      "name": "Manual Approval",
+      "short": "Approval",
+      "kind": "gate",
+      "description": "Protected environments need human sign-off before the release goes out. Environments without protection pass straight through.",
+      "duration": { "min": 400, "max": 700 },
+      "ci": { "gate": true },
+      "steps": [
+        { "level": "info", "message": "Checking protection rules for {env}." },
+        { "level": "success", "message": "No approval required for {env}: auto-approved." }
+      ],
+      "failure": {
+        "code": "APPROVAL_DECLINED",
+        "message": "Deployment was not approved.",
+        "details": [],
+        "hint": "Address the reviewers' feedback and run the pipeline again."
+      }
+    },
+    {
+      "id": "deploy",
+      "code": "D",
+      "name": "Deployment",
+      "short": "Deploy",
+      "locked": true,
+      "kind": "deploy",
+      "description": "The image is rolled out to the selected environment and health-checked.",
+      "duration": { "min": 2600, "max": 3900 },
+      "ci": {
+        "steps": [
+          { "name": "Download build output", "uses": "actions/download-artifact@v4", "with": { "name": "dist", "path": "dist/" } },
+          { "name": "Roll out", "run": "./scripts/deploy.sh \"$GITHUB_SHA\"" },
+          { "name": "Health check", "run": "./scripts/healthcheck.sh" }
+        ]
+      },
+      "steps": [
+        { "level": "info", "message": "Deploying application to {env}." },
+        { "level": "dim", "message": "Strategy: {strategy} · {replicas} replica(s) in {region}." },
+        { "level": "dim", "message": "Rolling out storefront-web:{commit}." },
+        { "level": "dim", "message": "Health checks passing ({replicas}/{replicas})." },
+        { "level": "dim", "message": "Traffic switched to new release." },
+        { "level": "success", "message": "Deployment successful → {url}" }
+      ],
+      "failure": {
+        "code": "DEPLOY_HEALTHCHECK_TIMEOUT",
+        "message": "Deployment failed: health check timed out after 30s.",
+        "details": ["GET /healthz → 503 Service Unavailable", "Rollout halted; previous release kept serving traffic."],
+        "hint": "Check the service start-up logs and readiness probe, then retry."
+      }
+    }
+  ]
+}

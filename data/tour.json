@@ -1,0 +1,114 @@
+{
+  "intro": {
+    "title": "Ride the line",
+    "text": "This tour runs a simulated pipeline and stops at every station. At each stop you'll see what a real CI/CD pipeline does there, what to watch for in DeployX, and the classic way that stage breaks.",
+    "points": [
+      "Each station is a pipeline stage. The train is your commit, travelling toward the terminus: the environment it will run in.",
+      "The run pauses before every stop. Press Continue to move on, or break a stage to see what a failure looks like.",
+      "Everything is simulated. Nothing touches real servers, and tour runs are tagged and kept out of your statistics."
+    ]
+  },
+  "fallback": {
+    "watch": "Watch the log and the station status.",
+    "risk": "Any stage can fail, and a failure stops the line so nothing broken moves on."
+  },
+  "stages": {
+    "git": {
+      "headline": "Something changes, the pipeline starts",
+      "real": "A push to the repository fires a webhook. The CI system checks the request really came from the Git host, then queues a run for that exact commit.",
+      "watch": "The first log lines name the commit, the branch and the run ID. Every later stage works on this one commit.",
+      "risk": "A rotated secret or a broken webhook means pushes are rejected or ignored and nothing runs at all."
+    },
+    "checkout": {
+      "headline": "Get exactly the code that was pushed",
+      "real": "A fresh, clean runner clones the repository and checks out the commit. Starting clean means yesterday's leftovers can't hide a problem.",
+      "watch": "The same commit hash is used from here to production. That is what makes the results trustworthy.",
+      "risk": "Private submodules or missing permissions: the runner has no person to type a password."
+    },
+    "build": {
+      "headline": "Turn source into something deployable",
+      "real": "Dependencies are installed and the code is compiled or bundled into an artifact, often a container image. It is built once and the same artifact is reused in every environment.",
+      "watch": "The image is tagged with the commit hash. That artifact is what gets promoted and rolled back later.",
+      "risk": "Works on my laptop, fails on the runner: case-sensitive file names, missing dependencies, different tool versions."
+    },
+    "test": {
+      "headline": "Prove it still works",
+      "real": "Unit tests check small pieces, integration tests check pieces together. They catch regressions before users do, and a failing test stops the line.",
+      "watch": "The log shows test counts and coverage. Failing here costs minutes; failing in production costs customers.",
+      "risk": "Tests that depend on the clock, the timezone or the order they run in pass locally and fail in CI."
+    },
+    "security": {
+      "headline": "Check for known holes",
+      "real": "Dependency audits, static analysis and secret scanning look for vulnerabilities and leaked keys. High-severity findings block the release.",
+      "watch": "It often runs in parallel with testing to save time. If one of the two fails, the other is cancelled (fail-fast).",
+      "risk": "A transitive dependency with a known vulnerability, or a key committed by accident."
+    },
+    "approval": {
+      "headline": "A human decides",
+      "real": "Protected environments require sign-off from reviewers before the deploy goes ahead. The author can't approve their own change, so a second pair of eyes always sees it.",
+      "watch": "Production needs two approvals and has a timeout; Development passes straight through. A rejection or a timeout stops the run without counting as a failure.",
+      "risk": "Approvals that sit unseen for hours. Waiting is often the biggest part of lead time."
+    },
+    "deploy": {
+      "headline": "Roll it out, then verify",
+      "real": "The artifact is released with a strategy such as rolling, blue/green or canary. A canary sends a small share of traffic to the new version first and watches its error rate; if the errors rise, it rolls back on its own. Health checks confirm the new version is serving before the old one is retired.",
+      "watch": "Production uses a canary: watch the traffic bar above the Deploy station grow from 10% to 50% to 100%. Break this stage to see an automatic rollback.",
+      "risk": "Missing environment config, or a memory limit that is too low: the app starts, dies, and health checks never pass."
+    },
+    "lint": {
+      "headline": "Cheap checks first",
+      "real": "Linters and formatters catch style problems and obvious mistakes in seconds, before slower stages spend minutes.",
+      "watch": "Fast checks belong early, so failures are cheap.",
+      "risk": "Rules nobody agrees on turn lint into noise that people learn to ignore."
+    },
+    "e2e": {
+      "headline": "Walk the real user journeys",
+      "real": "A headless browser clicks through the key flows, such as browse, add to cart and check out, against the built application.",
+      "watch": "Slow but realistic. Keep to the few journeys that matter most.",
+      "risk": "Timeouts and fragile selectors: the test fails although the app is fine, or the other way round."
+    },
+    "license": {
+      "headline": "Check what you're allowed to ship",
+      "real": "Every dependency has a license. The audit checks them against company policy so a restrictive license doesn't slip in unnoticed.",
+      "watch": "It is cheap and can run in parallel with other checks.",
+      "risk": "A new package with a copyleft license pulled in indirectly."
+    },
+    "perf": {
+      "headline": "Measure speed before users do",
+      "real": "A short load test checks response times and error rates against an agreed budget.",
+      "watch": "A budget such as p95 under 300 ms turns 'feels slow' into a pass or a fail.",
+      "risk": "A query that is fine with ten rows and terrible with ten million."
+    },
+    "migrate": {
+      "headline": "Change the database safely",
+      "real": "Schema migrations run before the new version starts. They should also work with the old version, so a rollback stays possible.",
+      "watch": "Database changes are the hardest thing to undo.",
+      "risk": "Long locks that block live traffic, or a migration that cannot be reversed."
+    },
+    "smoke": {
+      "headline": "Confirm the live release works",
+      "real": "A few quick requests against the real environment right after the deploy prove the key pages respond.",
+      "watch": "If it fails, roll back first and investigate second.",
+      "risk": "The deploy is green, but a critical page returns an error."
+    }
+  },
+  "done": {
+    "title": "You rode the whole line",
+    "text": "The release reached its destination. Here is what the line was doing for you:",
+    "points": [
+      "Fast, cheap checks come first; slower, riskier steps come later.",
+      "A failure stops everything after it, so nothing broken moves on.",
+      "Protected environments need a second pair of eyes.",
+      "DORA metrics turn all of this into numbers: how often you ship, how long it takes, how often it breaks and how fast you recover."
+    ]
+  },
+  "failed": {
+    "title": "The line stopped",
+    "text": "That is a pipeline doing its job: the problem was caught at {stage} and nothing after it ran. A real team reads the logs, fixes the cause and runs again. The Retry button on the Overview does exactly that, and Incident Drills let you practise finding the fix."
+  },
+  "next": [
+    { "view": "drills", "label": "Practise an incident drill" },
+    { "view": "pipelines", "label": "Edit the pipeline" },
+    { "view": "metrics", "label": "See the DORA metrics" }
+  ]
+}

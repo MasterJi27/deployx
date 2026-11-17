@@ -1,0 +1,8 @@
+# macOS metadata (created automatically on non-Apple-formatted drives)
+.DS_Store
+._*
+
+# editor and OS noise
+.vscode/
+.idea/
+Thumbs.db

@@ -1,0 +1,207 @@
+{
+  "difficulty": {
+    "easy": { "label": "Easy", "base": 100, "par": 30 },
+    "medium": { "label": "Medium", "base": 150, "par": 45 },
+    "hard": { "label": "Hard", "base": 200, "par": 60 }
+  },
+  "ranks": [
+    { "name": "Passenger", "min": 0 },
+    { "name": "Conductor", "min": 150 },
+    { "name": "Signal Engineer", "min": 400 },
+    { "name": "Station Master", "min": 700 }
+  ],
+  "drills": [
+    {
+      "id": "webhook-signature",
+      "title": "The locked front gate",
+      "difficulty": "easy",
+      "stage": "git",
+      "env": "development",
+      "branch": "main",
+      "briefing": "Someone rotated the webhook secret on the Git host this morning. Since then, every push is turned away before the pipeline can start.",
+      "failure": {
+        "code": "GIT_WEBHOOK_SIGNATURE_MISMATCH",
+        "message": "Push event rejected: signature verification failed (HTTP 401).",
+        "details": [
+          "X-Hub-Signature-256 received: sha256=9f2c41…e1",
+          "X-Hub-Signature-256 expected: sha256=41ab07…07",
+          "Webhook secret last rotated on the Git host: 2 hours ago"
+        ]
+      },
+      "hint": "Read the two signature lines. Why would the same payload produce a different signature?",
+      "choices": [
+        { "label": "Update the webhook secret in the CI settings so it matches the one on the Git host", "correct": true, "why": "The signature is an HMAC of the payload made with a shared secret. After a rotation both sides must hold the same value, or every delivery is rejected." },
+        { "label": "Turn off signature verification so deliveries are accepted", "correct": false, "why": "That removes authentication: anyone could trigger your pipeline with a forged push. Never trade security for a green build." },
+        { "label": "Increase the webhook timeout on the Git host", "correct": false, "why": "The request was not slow; it was rejected with a 401. Timeouts do not affect signature checks." },
+        { "label": "Re-push the same commit until it goes through", "correct": false, "why": "Every retry is signed with the new secret and fails the same way." }
+      ],
+      "explanation": "The receiver computes an HMAC-SHA256 of the request body with its stored secret and compares it to the header. When only one side was rotated, the two signatures can never match.",
+      "lesson": "Rotate secrets on both ends together, and treat a 401 at the trigger as a credentials problem rather than a code problem."
+    },
+    {
+      "id": "case-sensitive-import",
+      "title": "Works on my machine",
+      "difficulty": "easy",
+      "stage": "build",
+      "env": "development",
+      "branch": "feature/checkout-v2",
+      "briefing": "A teammate's checkout feature builds perfectly on their laptop. The pipeline disagrees.",
+      "failure": {
+        "code": "BUILD_MODULE_NOT_FOUND",
+        "message": "Build failed: Module not found: Can't resolve './CheckoutSummary' in '/runner/work/src/pages/checkout'.",
+        "details": [
+          "ERROR in ./src/pages/checkout/index.js 14:0-48",
+          "  Did you mean 'checkoutSummary.js'?",
+          "npm ERR! code ELIFECYCLE · exit status 1"
+        ]
+      },
+      "hint": "Compare the import with the file name the build suggests. What differs?",
+      "choices": [
+        { "label": "Make the import match the file's exact name: './checkoutSummary'", "correct": true, "why": "Linux file systems are case-sensitive; macOS and Windows usually are not. The import has to match the real file name exactly." },
+        { "label": "Clear the dependency cache and rebuild", "correct": false, "why": "The missing module is your own source file, not a package. A clean cache cannot change a file name." },
+        { "label": "Upgrade the runner's Node.js version", "correct": false, "why": "Module resolution behaves the same across supported Node versions; the file simply is not found under that spelling." },
+        { "label": "Add the checkout folder to the bundler's resolve paths", "correct": false, "why": "The folder already resolves, since the error names it. The casing of the file name is what fails." }
+      ],
+      "explanation": "The developer's laptop treats CheckoutSummary and checkoutSummary as the same file. The Linux runner does not, so the import points at a file that does not exist.",
+      "lesson": "CI is the first honest test of your file names. Match casing exactly, and consider enabling a lint rule for case-sensitive imports."
+    },
+    {
+      "id": "vulnerable-dependency",
+      "title": "The gate that said no",
+      "difficulty": "easy",
+      "stage": "security",
+      "env": "staging",
+      "branch": "main",
+      "briefing": "Tests are green and the build is fine, but the security gate refuses to let this release continue.",
+      "failure": {
+        "code": "SEC_HIGH_SEVERITY_FOUND",
+        "message": "Security gate failed: 1 high-severity vulnerability found.",
+        "details": [
+          "lodash@4.17.15 · prototype pollution · severity HIGH · fixed in 4.17.21",
+          "Path: storefront-web > admin-ui > lodash@4.17.15",
+          "Policy: block on severity >= high"
+        ]
+      },
+      "hint": "The scan already tells you which version fixes it.",
+      "choices": [
+        { "label": "Upgrade lodash to the patched 4.17.21 and refresh the lockfile", "correct": true, "why": "The vulnerable code is replaced by a fixed release, so the finding disappears for the right reason." },
+        { "label": "Add the advisory to the ignore list", "correct": false, "why": "An ignore list hides a known hole instead of closing it. It is only acceptable with a documented risk acceptance and an expiry date, not as a quick unblock." },
+        { "label": "Lower the policy threshold to 'critical' only", "correct": false, "why": "Changing the gate so the failure no longer counts is not a fix. The vulnerable code still ships." },
+        { "label": "Skip the security stage for this release", "correct": false, "why": "Bypassing the gate sends the vulnerability onward. Gates exist to stop exactly this." }
+      ],
+      "explanation": "A transitive dependency pulled in an old lodash. Upgrading to the fixed version removes the vulnerable code rather than silencing the scanner.",
+      "lesson": "Fix the finding, not the gate. If a patched version exists, upgrading is almost always the cheapest correct answer."
+    },
+    {
+      "id": "timezone-test",
+      "title": "Fails only after midnight",
+      "difficulty": "medium",
+      "stage": "test",
+      "env": "development",
+      "branch": "develop",
+      "briefing": "A date-grouping test passes locally, fails on the runner, and only for orders placed just after midnight.",
+      "failure": {
+        "code": "TEST_ASSERTION_FAILED",
+        "message": "1 test failed in orders/report.spec.js.",
+        "details": [
+          "✕ groups orders by calendar day",
+          "  expected: '2026-03-01'",
+          "  received: '2026-02-28'",
+          "Runner timezone: UTC · Author's laptop: Asia/Kolkata (UTC+05:30)"
+        ]
+      },
+      "hint": "Look at the last line. What differs between the two machines?",
+      "choices": [
+        { "label": "Make the code and the test use explicit UTC dates instead of the machine's local timezone", "correct": true, "why": "Once the date logic no longer depends on where it runs, it gives the same answer on every machine." },
+        { "label": "Re-run the job until the test passes", "correct": false, "why": "This is not random flakiness. It fails deterministically whenever the runner's timezone differs from the author's, so retrying only burns minutes." },
+        { "label": "Increase the test timeout", "correct": false, "why": "Nothing timed out. An assertion compared two different dates." },
+        { "label": "Delete the test because it only fails in CI", "correct": false, "why": "A test that fails in CI is revealing a real environment dependency. Deleting it removes the safety net and leaves the bug." }
+      ],
+      "explanation": "The code groups orders using the local timezone. Five and a half hours of offset moves orders near midnight into the previous day on a UTC runner.",
+      "lesson": "Never let tests depend on the clock or timezone of the machine. Inject time, or pin everything to UTC."
+    },
+    {
+      "id": "private-submodule",
+      "title": "One repo too many",
+      "difficulty": "medium",
+      "stage": "checkout",
+      "env": "staging",
+      "branch": "main",
+      "briefing": "The main repository clones fine. A private submodule added yesterday stops the checkout cold.",
+      "failure": {
+        "code": "CHECKOUT_SUBMODULE_AUTH",
+        "message": "fatal: could not read Username for 'https://git.example/acme/design-tokens.git': terminal prompts disabled.",
+        "details": [
+          "Submodule 'vendor/design-tokens' registered for path 'vendor/design-tokens'",
+          "fatal: clone of 'https://git.example/acme/design-tokens.git' into submodule path failed",
+          "Main repository checkout: OK · Submodule checkout: FAILED"
+        ]
+      },
+      "hint": "Which credential does the runner have, and which repositories does it cover?",
+      "choices": [
+        { "label": "Give the runner read access to the private submodule repo with a deploy key or a repo-scoped token", "correct": true, "why": "The runner's credential only covers the main repository. A read-only, least-privilege credential lets it clone the submodule without a person at the prompt." },
+        { "label": "Commit the submodule's files directly into the main repository", "correct": false, "why": "It works, but it throws away history and ownership, and the real problem (the runner lacking access) returns with the next private dependency." },
+        { "label": "Turn off submodule checkout and build without it", "correct": false, "why": "The build needs those design tokens. This trades a checkout error for a confusing build error later." },
+        { "label": "Use a personal admin token with full account access", "correct": false, "why": "It would work, but a broad personal token on a shared runner is a serious leak risk. Prefer read-only, repo-scoped credentials." }
+      ],
+      "explanation": "Cloning a private repository needs credentials. CI has no human to type them, so the runner must be given a narrowly scoped one.",
+      "lesson": "Every new private dependency needs an access plan for CI. Give pipelines the least privilege that gets the job done."
+    },
+    {
+      "id": "missing-env-var",
+      "title": "Healthy in Dev, dead in Staging",
+      "difficulty": "medium",
+      "stage": "deploy",
+      "env": "staging",
+      "branch": "main",
+      "briefing": "The image is identical to the one that passed Development. Staging refuses to become healthy.",
+      "failure": {
+        "code": "DEPLOY_HEALTHCHECK_FAILED",
+        "message": "Deployment failed: readiness probe returned 503 for all replicas.",
+        "details": [
+          "storefront-web: Error: DATABASE_URL is not defined",
+          "    at loadConfig (config/db.js:9:11)",
+          "Container exited with code 1 · restarted 3 times",
+          "GET /healthz → 503 Service Unavailable"
+        ]
+      },
+      "hint": "Same image, different outcome. What else differs between the two environments?",
+      "choices": [
+        { "label": "Add the DATABASE_URL secret to the Staging environment's configuration and redeploy", "correct": true, "why": "Configuration is per environment. The app crashes on start because Staging never received the variable that Development has." },
+        { "label": "Scale Staging up to more replicas", "correct": false, "why": "Every replica crashes for the same reason. More replicas only means more crash loops." },
+        { "label": "Extend the health check timeout", "correct": false, "why": "The container exits with code 1 before it could ever answer. Waiting longer changes nothing." },
+        { "label": "Rebuild the image from scratch", "correct": false, "why": "The same code worked in Development, so the image is not broken. The environment is missing configuration." }
+      ],
+      "explanation": "The application reads DATABASE_URL at start-up. In Staging it is undefined, so the process exits and the readiness probe never succeeds.",
+      "lesson": "Build once, configure per environment. A failing start-up with a missing variable is almost always an environment config gap, not a code bug."
+    },
+    {
+      "id": "oom-killed",
+      "title": "Killed within seconds",
+      "difficulty": "hard",
+      "stage": "deploy",
+      "env": "staging",
+      "branch": "main",
+      "briefing": "This release adds an in-memory search index. The new pods start, then vanish within seconds, and the rollout stalls.",
+      "failure": {
+        "code": "DEPLOY_OOM_KILLED",
+        "message": "Deployment failed: container OOMKilled (exit code 137) during start-up.",
+        "details": [
+          "storefront-web-7c9d: State: Terminated · Reason: OOMKilled · Exit Code: 137",
+          "Memory limit: 256Mi · peak before kill: 255Mi",
+          "Release notes: product search index is now loaded into memory at boot",
+          "GET /healthz → connection refused"
+        ]
+      },
+      "hint": "Exit code 137 with OOMKilled has one meaning. Compare the limit with the peak.",
+      "choices": [
+        { "label": "Raise the container memory limit to fit the new index, then watch real usage after the deploy", "correct": true, "why": "Exit code 137 with OOMKilled means the kernel killed the process for exceeding its memory limit. The new release legitimately needs more than 256Mi." },
+        { "label": "Restart the pods", "correct": false, "why": "They will load the same index and hit the same limit. A restart resets the clock, not the cause." },
+        { "label": "Lengthen the readiness probe delay", "correct": false, "why": "The pod is not slow to become ready; it is killed before it can be. Probe timing does not change the memory limit." },
+        { "label": "Remove the memory limit entirely", "correct": false, "why": "That deletes the guard rail: one leak could then starve the whole node. Right-size the limit instead of removing it." }
+      ],
+      "explanation": "The peak (255Mi) sits right at the 256Mi limit. Loading the index at boot pushes memory over the line and the kernel kills the container before it can serve traffic.",
+      "lesson": "When a release changes what is held in memory, its resource limits must change with it. Check limits whenever you see exit code 137."
+    }
+  ]
+}

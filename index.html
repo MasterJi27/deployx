@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DeployX · CI/CD Pipeline Simulator</title>
+  <meta name="description" content="DeployX is an interactive, fully simulated CI/CD pipeline console for learning how code moves from a git push to production.">
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS (official browser CDN, no build step) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    if (window.tailwind) {
+      tailwind.config = {
+        darkMode: ['class', '[data-theme="dark"]'],
+        theme: {
+          extend: {
+            colors: {
+              ground: 'var(--ground)', surface: 'var(--surface)', ink: 'var(--ink)',
+              muted: 'var(--muted)', line: 'var(--line)', amber: 'var(--amber)', board: 'var(--board)'
+            },
+            fontFamily: {
+              sans: ['Barlow', 'Helvetica Neue', 'Arial', 'sans-serif'],
+              display: ['Barlow Condensed', 'Arial Narrow', 'sans-serif'],
+              mono: ['IBM Plex Mono', 'Courier New', 'monospace']
+            }
+          }
+        }
+      };
+    }
+  </script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- SVG icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-overview" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/></symbol>
+    <symbol id="i-pipeline" viewBox="0 0 24 24"><path d="M3 12h18"/><circle cx="6" cy="12" r="2.2"/><circle cx="12" cy="12" r="2.2"/><circle cx="18" cy="12" r="2.2"/></symbol>
+    <symbol id="i-deploy" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-env" viewBox="0 0 24 24"><path d="M12 3.5 3.5 8 12 12.5 20.5 8z"/><path d="M3.5 12 12 16.5 20.5 12"/><path d="M3.5 16 12 20.5 20.5 16"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5.5h16V16H10l-4.5 3.5V16H4z"/><path d="M8.5 10h7"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 8-11h-6z"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+    <symbol id="i-rollback" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></symbol>
+    <symbol id="i-drill" viewBox="0 0 24 24"><path d="M7 18v-6a5 5 0 0 1 10 0v6"/><path d="M5 18h14M12 3v2M4.5 6.5l1.4 1.4M19.5 6.5l-1.4 1.4"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.5"/><circle cx="8" cy="17" r="2.5"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></symbol>
+    <symbol id="i-retry" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 1 0 2.4-5.5"/><path d="M4.5 4.5v4h4"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5v-2a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5"/><path d="M4.5 20h15"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 21.5 20h-19z"/><path d="M12 10v4.5M12 17.2v.2"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 7.8v.2"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 9.5 3 2.5-3 2.5M12.5 15H17"/></symbol>
+    <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M9 4.5v15"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.1M10 10h.1M13.5 10h.1M17 10h.1M7 14h10"/></symbol>
+  </defs>
+</svg>
+
+<!-- Initial loading state -->
+<div id="app-loader" class="app-loader" role="status" aria-live="polite">
+  <div class="loader-line"><span></span></div>
+  <p class="eyebrow">Loading pipeline configuration</p>
+</div>
+
+<!-- Fatal load error (shown when the JSON files cannot be fetched) -->
+<div id="app-error" class="app-loader" hidden>
+  <div class="card" style="max-width:520px;padding:24px">
+    <p class="eyebrow" style="color:var(--red)">Could not start DeployX</p>
+    <h2 class="display" style="font-size:28px;margin:6px 0 8px">Configuration files did not load</h2>
+    <p id="app-error-msg" style="color:var(--muted);margin-bottom:12px"></p>
+    <p style="color:var(--muted)">DeployX reads <code>data/*.json</code> with <code>fetch()</code>, which browsers block on <code>file://</code>. Open the folder with a local server, for example VS Code <strong>Live Server</strong> or <code>python3 -m http.server</code>.</p>
+    <button class="btn btn-primary" style="margin-top:16px" onclick="location.reload()">Try again</button>
+  </div>
+</div>
+
+<div id="app" class="app-shell" hidden>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar" aria-label="Primary">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"><span></span></span>
+      <span class="brand-name">DEPLOYX</span>
+      <button class="btn-icon sidebar-close lg:hidden" data-action="close-sidebar" aria-label="Close navigation"><svg class="ic"><use href="#i-x"/></svg></button>
+    </div>
+    <p class="eyebrow nav-label">Console</p>
+    <nav id="nav" class="nav" aria-label="Sections">
+      <button class="nav-item" data-action="nav" data-view="overview"><svg class="ic"><use href="#i-overview"/></svg><span>Overview</span><kbd>1</kbd></button>
+      <button class="nav-item" data-action="nav" data-view="pipelines"><svg class="ic"><use href="#i-pipeline"/></svg><span>Pipelines</span><kbd>2</kbd></button>
+      <button class="nav-item" data-action="nav" data-view="deployments"><svg class="ic"><use href="#i-deploy"/></svg><span>Deployments</span><kbd>3</kbd></button>
+      <button class="nav-item" data-action="nav" data-view="builds"><svg class="ic"><use href="#i-history"/></svg><span>Build History</span><kbd>4</kbd></button>
+      <button class="nav-item" data-action="nav" data-view="environment"><svg class="ic"><use href="#i-env"/></svg><span>Environment</span><kbd>5</kbd></button>
+      <button class="nav-item" data-action="nav" data-view="metrics"><svg class="ic"><use href="#i-chart"/></svg><span>DORA Metrics</span><kbd>6</kbd></button>
+      <button class="nav-item" data-action="nav" data-view="drills"><svg class="ic"><use href="#i-drill"/></svg><span>Incident Drills</span><kbd>7</kbd></button>
+      <button class="nav-item" data-action="nav" data-view="chaos"><svg class="ic"><use href="#i-bolt"/></svg><span>Chaos Mode</span><kbd>8</kbd></button>
+      <button class="nav-item" data-action="nav" data-view="settings"><svg class="ic"><use href="#i-settings"/></svg><span>Settings</span><kbd>9</kbd></button>
+    </nav>
+    <div class="ticket" role="note">
+      <p class="ticket-eyebrow">Simulation only</p>
+      <p class="ticket-body">Nothing here touches real infrastructure. Every repository, build and environment is simulated in your browser.</p>
+    </div>
+  </aside>
+  <div id="sidebar-scrim" class="scrim" data-action="close-sidebar" hidden></div>
+
+  <!-- Main column -->
+  <div class="main-col">
+    <header class="topbar">
+      <button class="btn-icon lg:hidden" data-action="open-sidebar" aria-label="Open navigation"><svg class="ic"><use href="#i-menu"/></svg></button>
+      <button class="btn-icon hidden lg:inline-flex" data-action="toggle-sidebar" aria-label="Collapse or expand sidebar"><svg class="ic"><use href="#i-sidebar"/></svg></button>
+      <div class="min-w-0 flex-1">
+        <h1 id="view-title" class="view-title">Overview</h1>
+        <p id="view-sub" class="view-sub"></p>
+      </div>
+      <button id="env-chip" class="env-chip hidden sm:inline-flex" data-action="nav" data-view="environment" aria-label="Change environment"></button>
+      <button class="btn-icon chat-btn" data-action="chat-toggle" aria-label="Open or close ChatOps"><svg class="ic"><use href="#i-chat"/></svg><span id="chat-badge" class="chat-badge" hidden></span></button>
+      <button id="incident-chip" class="inc-chip" data-action="nav" data-view="chaos" hidden aria-live="assertive"></button>
+      <button id="approval-chip" class="appr-chip" data-action="nav" data-view="overview" hidden aria-label="Awaiting approval, open the approval panel"><span class="appr-label">Awaiting approval · </span><span id="appr-time"></span></button>
+      <button class="palette-btn hidden md:inline-flex" data-action="open-palette" aria-label="Open command palette">
+        <svg class="ic"><use href="#i-search"/></svg><span>Commands</span><kbd id="palette-kbd">Ctrl K</kbd>
+      </button>
+      <button class="btn-icon md:hidden" data-action="open-palette" aria-label="Open command palette"><svg class="ic"><use href="#i-search"/></svg></button>
+      <button class="btn-icon" data-action="toggle-theme" aria-label="Toggle dark and light theme"><svg class="ic"><use id="theme-icon" href="#i-moon"/></svg></button>
+      <button class="btn btn-primary" data-action="run" data-run-btn><svg class="ic ic-fill"><use href="#i-play"/></svg><span>Run pipeline</span></button>
+    </header>
+
+    <main id="main" class="main" tabindex="-1">
+
+      <!-- ============ OVERVIEW ============ -->
+      <section class="view" data-view="overview" aria-labelledby="view-title">
+        <div id="tour-invite" class="mb-4"></div>
+        <div id="stats" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3"></div>
+
+        <section class="card map-card mt-4" aria-label="Pipeline line map">
+          <header class="map-head">
+            <div class="min-w-0">
+              <p class="eyebrow"><span id="map-line-name">DeployX Main Line</span> <span class="sim-tag">Simulated</span></p>
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                <h2 id="map-title" class="display map-title">Ready to depart</h2>
+                <span id="map-flap" class="flap flap-idle">Idle</span>
+              </div>
+              <p id="map-meta" class="mono map-meta"></p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button class="btn btn-primary" data-action="run" data-run-btn><svg class="ic ic-fill"><use href="#i-play"/></svg><span>Run pipeline</span></button>
+              <button class="btn btn-outline" data-action="cancel" data-cancel-btn disabled><svg class="ic ic-fill"><use href="#i-stop"/></svg><span>Cancel</span></button>
+              <button class="btn btn-outline" data-action="retry" data-retry-btn disabled><svg class="ic"><use href="#i-retry"/></svg><span>Retry</span></button>
+              <button class="btn btn-outline" data-action="tour-open"><svg class="ic"><use href="#i-info"/></svg><span>Tour</span></button>
+            </div>
+          </header>
+          <div class="map-scroll">
+            <svg id="metro" class="metro" viewBox="0 0 1000 118" role="img" aria-label="Pipeline stages drawn as a metro line"></svg>
+          </div>
+          <div class="map-foot">
+            <div class="bar bar-lg" role="progressbar" aria-label="Pipeline progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="run-bar"><span></span></div>
+            <span id="run-pct" class="mono">0%</span>
+            <span id="run-elapsed" class="mono">0.0s</span>
+          </div>
+        </section>
+
+        <div id="approval-panel" class="mt-3"></div>
+        <div id="rollout-panel" class="mt-3"></div>
+        <div class="incident-slot mt-3"></div>
+        <div id="run-alert" class="mt-3" aria-live="polite"></div>
+
+        <div id="stage-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3 mt-3"></div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mt-4">
+          <section class="terminal xl:col-span-2" aria-label="Pipeline logs">
+            <header class="terminal-head">
+              <span class="terminal-title"><svg class="ic"><use href="#i-terminal"/></svg> Live log</span>
+              <span id="term-count" class="terminal-count">0 lines</span>
+              <span class="flex-1"></span>
+              <label class="term-toggle"><input type="checkbox" data-pref="autoScroll"> Auto-scroll</label>
+              <button class="term-btn" data-action="term-copy"><svg class="ic"><use href="#i-copy"/></svg><span>Copy</span></button>
+              <button class="term-btn" data-action="term-download"><svg class="ic"><use href="#i-download"/></svg><span>.txt</span></button>
+              <button class="term-btn" data-action="term-clear"><svg class="ic"><use href="#i-trash"/></svg><span>Clear</span></button>
+            </header>
+            <div id="terminal" class="terminal-body" role="log" aria-live="off" tabindex="0" aria-label="Log output"></div>
+          </section>
+
+          <section class="card p-4" aria-label="Dispatch settings">
+            <p class="eyebrow">Dispatch</p>
+            <h2 class="display text-[22px] leading-6 mt-1 mb-3">Next run</h2>
+            <div id="dispatch"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ============ PIPELINES ============ -->
+      <section class="view" data-view="pipelines" hidden><div id="pipelines-view"></div></section>
+
+      <!-- ============ DEPLOYMENTS ============ -->
+      <section class="view" data-view="deployments" hidden>
+        <div class="card">
+          <div class="toolbar">
+            <label class="search">
+              <svg class="ic"><use href="#i-search"/></svg>
+              <span class="sr-only">Search deployments</span>
+              <input id="dep-search" type="search" maxlength="60" placeholder="Search ID, commit, branch…" autocomplete="off">
+            </label>
+            <label><span class="sr-only">Filter by status</span>
+              <select id="dep-status" class="select">
+                <option value="all">All statuses</option><option value="success">Successful</option><option value="failed">Failed</option><option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+            <label><span class="sr-only">Filter by environment</span><select id="dep-env" class="select"></select></label>
+            <span class="flex-1"></span>
+            <button class="btn btn-outline btn-sm" data-action="export-json"><svg class="ic"><use href="#i-download"/></svg><span>JSON</span></button>
+            <button class="btn btn-outline btn-sm" data-action="export-csv"><svg class="ic"><use href="#i-download"/></svg><span>CSV</span></button>
+            <button class="btn btn-outline btn-sm" data-action="clear-history"><svg class="ic"><use href="#i-trash"/></svg><span>Clear</span></button>
+          </div>
+          <div id="dep-table"></div>
+        </div>
+      </section>
+
+      <!-- ============ BUILD HISTORY ============ -->
+      <section class="view" data-view="builds" hidden><div id="builds-view"></div></section>
+
+      <!-- ============ ENVIRONMENT ============ -->
+      <section class="view" data-view="environment" hidden><div id="env-view"></div></section>
+
+      <!-- ============ INCIDENT DRILLS ============ -->
+      <section class="view" data-view="metrics" hidden><div id="metrics-view"></div></section>
+
+      <section class="view" data-view="chaos" hidden><div id="chaos-view"></div></section>
+
+      <section class="view" data-view="drills" hidden><div id="drills-view"></div></section>
+
+      <!-- ============ SETTINGS ============ -->
+      <section class="view" data-view="settings" hidden><div id="settings-view"></div></section>
+
+    </main>
+  </div>
+</div>
+
+<!-- Overlays -->
+<div id="modal-root"></div>
+<div id="palette" class="overlay" hidden>
+  <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="palette-input">
+      <svg class="ic"><use href="#i-search"/></svg>
+      <input id="palette-q" type="text" maxlength="60" placeholder="Type a command…" autocomplete="off" aria-label="Search commands" role="combobox" aria-expanded="true" aria-controls="palette-list">
+      <kbd>Esc</kbd>
+    </div>
+    <ul id="palette-list" class="palette-list" role="listbox"></ul>
+  </div>
+</div>
+<aside id="chat" class="chat" hidden aria-label="ChatOps">
+  <header class="chat-head">
+    <div class="min-w-0"><p class="eyebrow">ChatOps <span class="sim-tag">Simulated</span></p><h2 class="display chat-title">DeployX workspace</h2></div>
+    <button class="btn-icon" data-action="chat-toggle" aria-label="Close ChatOps"><svg class="ic"><use href="#i-x"/></svg></button>
+  </header>
+  <div class="chat-tabs" role="tablist" aria-label="Channels">
+    <button class="chat-tab" role="tab" data-action="chat-ch" data-ch="deployments" aria-selected="true"># deployments <span class="chat-tab-n"></span></button>
+    <button class="chat-tab" role="tab" data-action="chat-ch" data-ch="incidents" aria-selected="false"># incidents <span class="chat-tab-n"></span></button>
+  </div>
+  <div id="chat-list" class="chat-list" role="log" aria-live="polite" tabindex="0" aria-label="Messages"></div>
+  <form id="chat-form" class="chat-form" autocomplete="off">
+    <div id="chat-hints" class="chat-hints"></div>
+    <div class="flex gap-2">
+      <input id="chat-input" class="input flex-1" type="text" maxlength="120" placeholder="Type a command, for example /status" aria-label="Message the DeployX bot">
+      <button class="btn btn-primary btn-sm" type="submit">Send</button>
+    </div>
+  </form>
+</aside>
+<section id="tour" class="tour" hidden role="region" aria-label="Guided tour" aria-live="polite"></section>
+<div id="toasts" class="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
