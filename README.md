@@ -78,7 +78,7 @@ deployx/
 | `8` | Chaos Mode | Random incidents to triage |
 | `9` | Settings | Theme, simulation, data management, shortcuts |
 
-The chat drawer (`C`) and the guided tour (Tour button) are available from anywhere.
+The chat drawer (`C`), the guided tour (Tour button) and your **Profile** (the card at the bottom of the sidebar) are available from anywhere.
 
 ## Features
 
@@ -105,6 +105,7 @@ The chat drawer (`C`) and the guided tour (Tour button) are available from anywh
 
 - **Pipeline editor** — rename, reorder, switch off, pair as parallel and add stages from a library (lint, end-to-end tests, license audit, performance test, database migration, smoke test). Apply switches the whole app to your pipeline. Deployment is required. The YAML panel exports a GitHub Actions workflow (Git stage as trigger, other stages as jobs, parallel stages sharing `needs`). The YAML is a starting point to review, not a drop-in workflow.
 - **ChatOps** — a chat drawer with `#deployments` and `#incidents` channels. A bot posts live cards for deploys, rollbacks, approvals (with working Approve and Reject buttons), canary aborts and incidents, with unread and `@here` badges. Slash commands drive the real actions without changing your page: `/help`, `/status`, `/deploy <env>`, `/rollback <env>` (asks to confirm), `/promote <from> <to>`, `/approve`, `/reject [reason]`, `/retry`, `/cancel`, `/dora`.
+- **Profile** — your identity in the app: display name, role, team and avatar colour, shown in the sidebar and as your name in ChatOps, plus the reviewer you act as by default at the approval gate. It also shows your activity in numbers, 15 achievement badges earned from real use (first run, five deploys in a row, Production, rollback, approving and rejecting, a canary saving you, drills, chaos incidents, a custom pipeline, chat commands, finishing the tour) that raise your level from Trainee to Principal, and a recent-activity timeline. Demo history, drills and tours are not counted as your runs. **Download backup** saves everything in this browser to a JSON file, and **Restore backup** loads one back after a confirmation.
 - **Deployments and exports** — history table with search and filters, details dialog, JSON and CSV export.
 - **Interface** — light / dark / system theme, responsive layout down to phone width, collapsible sidebar, command palette, toasts, confirmation dialogs, empty and loading states, and persisted preferences.
 

@@ -44,6 +44,7 @@
     <symbol id="i-deploy" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></symbol>
     <symbol id="i-history" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
     <symbol id="i-env" viewBox="0 0 24 24"><path d="M12 3.5 3.5 8 12 12.5 20.5 8z"/><path d="M3.5 12 12 16.5 20.5 12"/><path d="M3.5 16 12 20.5 20.5 16"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.9-4 3.8-6 7.5-6s6.6 2 7.5 6"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5.5h16V16H10l-4.5 3.5V16H4z"/><path d="M8.5 10h7"/></symbol>
     <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 8-11h-6z"/></symbol>
     <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
@@ -113,6 +114,11 @@
       <button class="nav-item" data-action="nav" data-view="chaos"><svg class="ic"><use href="#i-bolt"/></svg><span>Chaos Mode</span><kbd>8</kbd></button>
       <button class="nav-item" data-action="nav" data-view="settings"><svg class="ic"><use href="#i-settings"/></svg><span>Settings</span><kbd>9</kbd></button>
     </nav>
+    <button class="user-card" data-action="nav" data-view="profile" aria-label="Open your profile">
+      <span id="user-av" class="user-av" aria-hidden="true">?</span>
+      <span class="user-text"><b id="user-name">Guest Engineer</b><small id="user-role"></small></span>
+      <svg class="ic user-chev" aria-hidden="true"><use href="#i-chevron"/></svg>
+    </button>
     <div class="ticket" role="note">
       <p class="ticket-eyebrow">Simulation only</p>
       <p class="ticket-body">Nothing here touches real infrastructure. Every repository, build and environment is simulated in your browser.</p>
@@ -241,6 +247,8 @@
       <section class="view" data-view="metrics" hidden><div id="metrics-view"></div></section>
 
       <section class="view" data-view="chaos" hidden><div id="chaos-view"></div></section>
+
+      <section class="view" data-view="profile" hidden><div id="profile-view"></div></section>
 
       <section class="view" data-view="drills" hidden><div id="drills-view"></div></section>
 

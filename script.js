@@ -73,6 +73,8 @@
   /* 2. Store: persistent preferences and history                        */
   /* ------------------------------------------------------------------ */
   const STORAGE_KEY = 'deployx:v1';
+  const PROFILE_ROLES = ['Developer', 'DevOps engineer', 'SRE', 'Engineering manager', 'Student'];
+  const PROFILE_COLORS = { amber: ['#FFB627', '#14161A'], blue: ['#2A69EA', '#FFFFFF'], green: ['#0B6B4E', '#FFFFFF'], orange: ['#EE5A24', '#14161A'], red: ['#B3261E', '#FFFFFF'], slate: ['#4A5059', '#FFFFFF'] };
   const MAX_HISTORY = 150;
 
   const Store = {
@@ -84,7 +86,8 @@
           autoScroll: true, confirmProd: true, approval: 'manual', strategy: 'env', chaosIntensity: 'normal', tourSeen: false, sidebarCollapsed: false, view: 'overview',
           failure: { enabled: false, mode: 'stage', stage: 'test', chance: 50 }
         },
-        history: [], nextRun: 1001, commitCursor: 0, seeded: false, drills: {}, pipeline: null, incidents: [], nextInc: 1, chat: [], nextMsg: 1
+        history: [], nextRun: 1001, commitCursor: 0, seeded: false, drills: {}, pipeline: null, incidents: [], nextInc: 1, chat: [], nextMsg: 1,
+        profile: { name: 'Guest Engineer', role: 'DevOps engineer', team: 'Platform', color: 'amber', reviewer: 'auto', earned: {}, counters: { approvals: 0, rejections: 0, commands: 0 }, tourDone: false, created: new Date().toISOString() }
       };
     },
     load() {
@@ -100,6 +103,20 @@
           if (!Array.isArray(base.pipeline)) base.pipeline = null;
           if (!Array.isArray(base.incidents)) base.incidents = [];
           if (!Number.isFinite(base.nextInc)) base.nextInc = base.incidents.length + 1;
+          const dp = this.defaults().profile;
+          const sp = saved.profile && typeof saved.profile === 'object' ? saved.profile : {};
+          const count = (v) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
+          base.profile = {
+            name: typeof sp.name === 'string' && sp.name.trim() ? sp.name.trim().slice(0, 28) : dp.name,
+            role: PROFILE_ROLES.includes(sp.role) ? sp.role : dp.role,
+            team: typeof sp.team === 'string' ? sp.team.slice(0, 24) : dp.team,
+            color: PROFILE_COLORS[sp.color] ? sp.color : dp.color,
+            reviewer: typeof sp.reviewer === 'string' ? sp.reviewer.slice(0, 40) : 'auto',
+            earned: sp.earned && typeof sp.earned === 'object' && !Array.isArray(sp.earned) ? sp.earned : {},
+            counters: { approvals: count((sp.counters || {}).approvals), rejections: count((sp.counters || {}).rejections), commands: count((sp.counters || {}).commands) },
+            tourDone: !!sp.tourDone,
+            created: typeof sp.created === 'string' ? sp.created : dp.created
+          };
           base.chat = Array.isArray(base.chat) ? base.chat.filter((m) => m && m.id && m.ch && (m.text || m.card)) : [];
           if (!Number.isFinite(base.nextMsg)) base.nextMsg = base.chat.length + 1;
           /* buttons that act on live state, and "in progress" cards, mean nothing after a reload */
@@ -354,7 +371,7 @@ const run = this.run = {
         g.cleanup = () => { clearTimeout(timer); g.timers.forEach(clearTimeout); signal.removeEventListener('abort', onAbort); };
         if (signal.aborted) onAbort();
         else if (opts.autoApprove) {
-          eligible.slice(0, g.required).forEach((name, i) => g.timers.push(setTimeout(() => this.approve(name), (1300 + i * 1200) / opts.speed)));
+          eligible.slice(0, g.required).forEach((name, i) => g.timers.push(setTimeout(() => this.approve(name, 'sim'), (1300 + i * 1200) / opts.speed)));
         }
       }).finally(() => {
         g.cleanup();
@@ -370,7 +387,7 @@ const run = this.run = {
       throw new GateDeclined('timeout');
     }
 
-    approve(name) {
+    approve(name, actor = 'user') {
       const g = this.gateState;
       if (!g || g.decided) return { ok: false, reason: 'No approval is pending.' };
       if (!g.approvers.includes(name)) return { ok: false, reason: `${name} is not a reviewer for ${g.envName}.` };
@@ -379,7 +396,7 @@ const run = this.run = {
       g.approvals.push({ name, t: Date.now() });
       this.log('success', `✓ ${name} approved (${g.approvals.length} of ${g.required}).`);
       if (g.approvals.length >= g.required) { g.decided = true; g.resolve({ type: 'approved' }); }
-      this.emit('gate', { type: 'update', g });
+      this.emit('gate', { type: 'update', g, actor });
       return { ok: true };
     }
 
@@ -390,6 +407,7 @@ const run = this.run = {
       this.log('error', `✕ ${name} rejected the deployment${why ? `: ${why}` : ''}.`);
       g.decided = true;
       g.resolve({ type: 'rejected', by: name, reason: why });
+      this.emit('gate', { type: 'rejected', g, actor: 'user' });
       return { ok: true };
     }
 
@@ -555,7 +573,8 @@ const run = this.run = {
     metrics: { title: 'DORA Metrics', sub: () => 'Delivery performance, computed from your simulated runs' },
     chaos: { title: 'Chaos Mode', sub: () => (chaos.armed ? 'Armed: something will break soon' : 'Random incidents to triage, scored and fed into DORA') },
     drills: { title: 'Incident Drills', sub: () => `${drillStats().done} of ${App.drills.length} solved · ${drillStats().points} pts · ${drillStats().rank.name}` },
-    settings: { title: 'Settings', sub: () => 'Preferences are saved in this browser' }
+    settings: { title: 'Settings', sub: () => 'Preferences are saved in this browser' },
+    profile: { title: 'Profile', sub: () => `${profile().role}${profile().team ? ` · ${profile().team}` : ''}` }
   };
 
   /* Preference validation: every write goes through here. */
@@ -2181,7 +2200,11 @@ const run = this.run = {
     const run = App.engine.run;
     const done = g.approvals.map((a) => a.name);
     const open = g.approvers.filter((n) => !done.includes(n));
-    if (!open.includes(App.approver)) App.approver = open.find((n) => n !== g.author) || open[0] || null;
+    if (App.approverFor !== g || !open.includes(App.approver)) { /* pick a fresh default for every new gate */
+      App.approverFor = g;
+      const mine = profile().reviewer; /* your profile's preferred reviewer, unless that person wrote the change */
+      App.approver = mine !== 'auto' && open.includes(mine) && mine !== g.author ? mine : open.find((n) => n !== g.author) || open[0] || null;
+    }
     const isAuthor = App.approver === g.author;
     const pts = (n) => (done.includes(n) ? 'is-done' : n === g.author ? 'is-author' : '');
     box.innerHTML = `<section class="card approval" role="group" aria-label="Approval required">
@@ -2207,6 +2230,8 @@ const run = this.run = {
   }
 
   function onGateEvent(ev) {
+    if (ev.actor === 'user' && ev.type === 'update') bumpCounter('approvals');
+    if (ev.actor === 'user' && ev.type === 'rejected') bumpCounter('rejections');
     renderApproval();
     chatGateEvent(ev);
     if (ev.type === 'open') toast('info', 'Approval needed', `${ev.g.envName} needs ${ev.g.required} approval${ev.g.required > 1 ? 's' : ''} before it deploys.`);
@@ -2295,7 +2320,7 @@ const run = this.run = {
     if (!t) return;
     t.focus = [];
     t.run = { id: run.id, failedStage: run.failedStage };
-    if (run.status === 'success') t.phase = 'done';
+    if (run.status === 'success') { t.phase = 'done'; profile().tourDone = true; Store.save(); checkAchievements(); }
     else if (run.status === 'failed') t.phase = 'failed';
     else App.tour = null;
     renderTour();
@@ -2603,6 +2628,7 @@ const run = this.run = {
       chatUpdate(chatUI.incMsg, { card: { color: 'green', title: `${inc.id} resolved in ${fmtDur(ttm)}`, status: `Fixed with ${(incAction(inc.action) || { label: 'a mitigation' }).label}. Rating ${rating}, ${inc.wrong.length} wrong call${inc.wrong.length === 1 ? '' : 's'}.`, buttons: [] } });
       chatUI.incMsg = null;
     }
+    checkAchievements();
     toast('success', 'Service restored', `${inc.id} resolved in ${fmtDur(ttm)} · rating ${rating}.`);
     renderIncident();
     renderChaosState();
@@ -2759,8 +2785,8 @@ const run = this.run = {
   function msgHTML(m) {
     const bot = m.who === 'bot';
     const c = m.card;
-    return `<div class="msg ${bot ? 'is-bot' : 'is-you'}"><span class="msg-av" aria-hidden="true">${bot ? 'DX' : 'You'}</span><div class="msg-body">
-      <div class="msg-head"><b>${bot ? 'DeployX Bot' : 'You'}</b>${bot ? '<span class="msg-app">APP</span>' : ''}<time>${fmtClock(new Date(m.t)).slice(0, 5)}</time></div>
+    return `<div class="msg ${bot ? 'is-bot' : 'is-you'}"><span class="msg-av" aria-hidden="true"${bot ? '' : ` style="${avatarStyle(profile().color)}"`}>${bot ? 'DX' : esc(initials(profile().name))}</span><div class="msg-body">
+      <div class="msg-head"><b>${bot ? 'DeployX Bot' : esc(profile().name)}</b>${bot ? '<span class="msg-app">APP</span>' : ''}<time>${fmtClock(new Date(m.t)).slice(0, 5)}</time></div>
       ${m.text ? `<p class="msg-text">${fmtChat(m.text)}</p>` : ''}
       ${c ? `<div class="msg-card is-${c.color || 'grey'}"><p class="msg-card-title">${fmtChat(c.title)}</p>${c.sub ? `<p class="msg-card-sub">${esc(c.sub)}</p>` : ''}
         ${c.fields && c.fields.length ? `<dl class="msg-fields">${c.fields.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}
@@ -2928,6 +2954,7 @@ const run = this.run = {
 
   async function chatCommand(raw) {
     const ch = chatUI.ch;
+    bumpCounter('commands');
     chatPost({ who: 'you', ch, text: raw });
     const [cmd, ...args] = raw.trim().slice(1).split(/\s+/);
     await pause(350);
@@ -3082,15 +3109,204 @@ const run = this.run = {
     }
   }
 
+  /* --- profile: who you are in the app, what you have done, and a backup of everything --- */
+  const profile = () => Store.state.profile;
+  const initials = (name) => (String(name).trim().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?');
+  const avatarStyle = (color) => { const c = PROFILE_COLORS[color] || PROFILE_COLORS.amber; return `background:${c[0]};color:${c[1]}`; };
+  const allApprovers = () => [...new Set(App.envs.flatMap((e) => (e.gate ? e.gate.approvers : [])))];
+  const realRuns = () => history().filter((r) => !r.seeded && !r.drill);
+  const bumpCounter = (key) => { profile().counters[key] += 1; Store.save(); checkAchievements(); };
+
+  const ACHIEVEMENTS = [
+    { id: 'first-departure', icon: 'play', title: 'First departure', desc: 'Run the pipeline once.', test: () => ({ cur: Math.min(1, realRuns().length), max: 1 }) },
+    {
+      id: 'on-the-rails', icon: 'chevron', title: 'On the rails', desc: 'Five successful deploys in a row.',
+      test: () => {
+        let best = 0;
+        let streak = 0;
+        [...realRuns()].reverse().forEach((r) => { if (r.status === 'success') { streak += 1; best = Math.max(best, streak); } else if (r.status === 'failed') streak = 0; });
+        return { cur: Math.min(5, best), max: 5 };
+      }
+    },
+    { id: 'prod-pilot', icon: 'deploy', title: 'Production pilot', desc: 'Deploy to Production successfully.', test: () => ({ cur: realRuns().some((r) => r.environment === 'production' && r.status === 'success' && !r.rollbackFrom) ? 1 : 0, max: 1 }) },
+    { id: 'safety-net', icon: 'rollback', title: 'Safety net', desc: 'Roll an environment back.', test: () => ({ cur: realRuns().some((r) => r.rollbackFrom && r.status === 'success') ? 1 : 0, max: 1 }) },
+    { id: 'bounce-back', icon: 'retry', title: 'Bounce back', desc: 'Recover from a failed run with a retry.', test: () => ({ cur: realRuns().some((r) => r.retryOf && r.status === 'success') ? 1 : 0, max: 1 }) },
+    { id: 'four-eyes', icon: 'check', title: 'Four eyes', desc: 'Approve a deployment as a reviewer.', test: () => ({ cur: Math.min(1, profile().counters.approvals), max: 1 }) },
+    { id: 'gatekeeper', icon: 'x', title: 'Gatekeeper', desc: 'Reject a deployment at the approval gate.', test: () => ({ cur: Math.min(1, profile().counters.rejections), max: 1 }) },
+    { id: 'canary-saved', icon: 'alert', title: 'Saved by the canary', desc: 'Let a canary roll itself back after an error spike.', test: () => ({ cur: realRuns().some((r) => r.autoRollback) ? 1 : 0, max: 1 }) },
+    { id: 'troubleshooter', icon: 'drill', title: 'Troubleshooter', desc: 'Solve 3 incident drills.', test: () => ({ cur: Math.min(3, drillStats().done), max: 3 }) },
+    {
+      id: 'station-master', icon: 'chart', title: 'Station Master', desc: 'Reach the top drill rank.',
+      test: () => { const s = drillStats(); const ranks = App.drillCfg.ranks; return { cur: s.rank === ranks[ranks.length - 1] ? 1 : 0, max: 1 }; }
+    },
+    { id: 'firefighter', icon: 'bolt', title: 'Firefighter', desc: 'Resolve 3 chaos incidents.', test: () => ({ cur: Math.min(3, Store.state.incidents.length), max: 3 }) },
+    { id: 'cool-head', icon: 'bolt', title: 'Cool head', desc: 'Resolve a chaos incident with an S rating.', test: () => ({ cur: Store.state.incidents.some((i) => i.rating === 'S') ? 1 : 0, max: 1 }) },
+    { id: 'architect', icon: 'settings', title: 'Pipeline architect', desc: 'Apply a customised pipeline.', test: () => ({ cur: Store.state.pipeline ? 1 : 0, max: 1 }) },
+    { id: 'chat-operator', icon: 'chat', title: 'Chat operator', desc: 'Run 3 slash commands in ChatOps.', test: () => ({ cur: Math.min(3, profile().counters.commands), max: 3 }) },
+    { id: 'tour-guide', icon: 'info', title: 'Tour guide', desc: 'Finish the guided tour.', test: () => ({ cur: profile().tourDone ? 1 : 0, max: 1 }) }
+  ];
+
+  const levelFor = (n) => (n >= 10 ? 'Principal' : n >= 6 ? 'Engineer' : n >= 3 ? 'Operator' : 'Trainee');
+  const earnedCount = () => ACHIEVEMENTS.filter((a) => profile().earned[a.id]).length;
+
+  /* Badges are earned from real activity. The first check after load is silent so existing progress never floods you with toasts. */
+  function checkAchievements(silent = false) {
+    const P = profile();
+    let changed = false;
+    ACHIEVEMENTS.forEach((a) => {
+      if (P.earned[a.id]) return;
+      const t = a.test();
+      if (t.cur >= t.max) {
+        P.earned[a.id] = Date.now();
+        changed = true;
+        if (!silent) toast('success', `Badge earned: ${a.title}`, a.desc, 6000);
+      }
+    });
+    if (changed) {
+      Store.save();
+      renderProfileBits();
+      if (prefs().view === 'profile') renderProfile();
+    }
+  }
+
+  /* The sidebar card and the chat show your identity wherever you are. */
+  function renderProfileBits() {
+    const P = profile();
+    const av = $('#user-av');
+    if (!av) return;
+    av.textContent = initials(P.name);
+    av.setAttribute('style', avatarStyle(P.color));
+    $('#user-name').textContent = P.name;
+    $('#user-role').textContent = `${levelFor(earnedCount())} · ${P.role}`;
+    renderChat();
+  }
+
+  function setProfile(key, val) {
+    const P = profile();
+    const v = String(val);
+    const clean = (s, n) => s.replace(/[<>{}]/g, '').trim().slice(0, n);
+    if (key === 'name') {
+      const n = clean(v, 28);
+      if (n) P.name = n; else toast('info', 'Name cannot be empty', 'Your previous name was kept.');
+    } else if (key === 'role' && PROFILE_ROLES.includes(v)) P.role = v;
+    else if (key === 'team') P.team = clean(v, 24);
+    else if (key === 'color' && PROFILE_COLORS[v]) P.color = v;
+    else if (key === 'reviewer') P.reviewer = v === 'auto' || allApprovers().includes(v) ? v : 'auto';
+    else return;
+    Store.save();
+    renderProfileBits();
+    if (prefs().view === 'profile') {
+      renderProfile();
+      const again = $(`[data-profile="${key}"]`);
+      if (again && again.type !== 'radio') again.focus();
+    }
+    $('#view-sub').textContent = VIEWS.profile.sub();
+  }
+
+  function activityItems() {
+    const items = [];
+    realRuns().slice(0, 12).forEach((r) => {
+      const verb = r.status === 'success' ? (r.rollbackFrom ? 'rolled back' : 'deployed') : r.status === 'failed' ? 'failed' : 'stopped';
+      items.push({ t: new Date(r.startedAt).getTime(), icon: r.status === 'success' ? 'check' : r.status === 'failed' ? 'x' : 'info', text: `${r.id} ${verb} on ${envById(r.environment).name}`, sub: r.commit.message });
+    });
+    Object.entries(Store.state.drills).forEach(([id, s]) => {
+      const d = drillById(id);
+      if (d && s.lastAt) items.push({ t: new Date(s.lastAt).getTime(), icon: 'drill', text: `Drill solved: ${d.title}`, sub: `Best ${s.best} pts · rating ${s.rating}` });
+    });
+    Store.state.incidents.slice(0, 8).forEach((i) => items.push({ t: i.resolvedAt, icon: 'bolt', text: `${i.id} resolved in ${fmtSpan(i.ttmMs)}`, sub: i.title }));
+    return items.sort((a, b) => b.t - a.t).slice(0, 10);
+  }
+
+  function renderProfile() {
+    const box = $('#profile-view');
+    if (!box) return;
+    const P = profile();
+    const runs = realRuns();
+    const ok = runs.filter((r) => r.status === 'success').length;
+    const finished = runs.filter((r) => r.status !== 'cancelled').length;
+    const ds = drillStats();
+    const incs = Store.state.incidents;
+    const avg = incs.length ? incs.reduce((a, i) => a + i.ttmMs, 0) / incs.length : null;
+    const earned = earnedCount();
+    const tiles = [
+      ['Runs triggered', runs.length, 'Not counting demo history'], ['Success rate', finished ? `${Math.round((ok / finished) * 100)}%` : '—', 'Finished runs only'],
+      ['Rollbacks', runs.filter((r) => r.rollbackFrom).length, 'Environments returned'], ['Approvals given', P.counters.approvals, `${P.counters.rejections} rejected`],
+      ['Drill points', ds.points, `${ds.rank.name} · ${ds.done} of ${App.drills.length} solved`], ['Incidents handled', incs.length, avg == null ? 'None yet' : `Avg ${fmtSpan(avg)} to restore`]
+    ];
+    const act = activityItems();
+    box.innerHTML = `
+      <section class="card profile-hero">
+        <span class="profile-av" style="${avatarStyle(P.color)}" aria-hidden="true">${esc(initials(P.name))}</span>
+        <div class="min-w-0 flex-1"><p class="eyebrow">Level · ${levelFor(earned)}</p><h2 class="display profile-name">${esc(P.name)}</h2>
+          <p class="text-muted text-sm">${esc(P.role)}${P.team ? ` · ${esc(P.team)}` : ''} · member since ${new Date(P.created).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+          <div class="flex items-center gap-3 mt-2"><div class="bar bar-lg" role="progressbar" aria-label="Badges earned" aria-valuemin="0" aria-valuemax="${ACHIEVEMENTS.length}" aria-valuenow="${earned}"><span style="width:${(earned / ACHIEVEMENTS.length) * 100}%"></span></div>
+            <span class="mono text-sm whitespace-nowrap">${earned} / ${ACHIEVEMENTS.length} badges</span></div></div>
+      </section>
+      <div class="grid grid-cols-1 xl:grid-cols-5 gap-4 mt-4">
+        <section class="card p-5 xl:col-span-2"><p class="eyebrow mb-3">Your details</p>
+          <div class="field"><label class="field-label" for="pf-name">Display name</label><input id="pf-name" class="input" type="text" maxlength="28" value="${esc(P.name)}" data-profile="name"></div>
+          <div class="field"><label class="field-label" for="pf-role">Role</label><select id="pf-role" class="select" data-profile="role">${PROFILE_ROLES.map((r) => `<option ${r === P.role ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></div>
+          <div class="field"><label class="field-label" for="pf-team">Team</label><input id="pf-team" class="input" type="text" maxlength="24" value="${esc(P.team)}" data-profile="team"></div>
+          <div class="field"><span class="field-label">Avatar colour</span><div class="swatches" role="radiogroup" aria-label="Avatar colour">${Object.keys(PROFILE_COLORS).map((c) =>
+    `<label class="swatch"><input type="radio" name="pf-color" value="${c}" data-profile="color" ${c === P.color ? 'checked' : ''}><span style="${avatarStyle(c)}">${esc(initials(P.name))}</span><i class="sr-only">${c}</i></label>`).join('')}</div></div>
+          <div class="field" style="margin-bottom:0"><label class="field-label" for="pf-reviewer">Approve as</label>
+            <select id="pf-reviewer" class="select" data-profile="reviewer"><option value="auto" ${P.reviewer === 'auto' ? 'selected' : ''}>First eligible reviewer</option>${allApprovers().map((n) => `<option ${n === P.reviewer ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+            <p class="field-hint">The reviewer you act as by default when a deployment waits for approval. The author of a change can never approve it.</p></div></section>
+        <section class="card p-5 xl:col-span-3"><p class="eyebrow mb-3">Your activity in numbers</p>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-3">${tiles.map(([l, v, n]) => `<div class="stat stat-flat"><span class="stat-value">${v}</span><span class="stat-label">${l}</span><span class="stat-note">${esc(String(n))}</span></div>`).join('')}</div></section>
+      </div>
+      <section class="card p-5 mt-4"><p class="eyebrow">Achievements</p><h2 class="display text-[24px] leading-7 mt-1 mb-3">Badges you earn by doing real things</h2>
+        <ul class="badges">${ACHIEVEMENTS.map((a) => {
+    const t = a.test();
+    const at = P.earned[a.id];
+    return `<li class="badge${at ? ' is-earned' : ''}"><span class="badge-ic" aria-hidden="true">${icon(a.icon)}</span><div class="min-w-0"><b>${esc(a.title)}</b><small>${esc(a.desc)}</small>
+          ${at ? `<em>Earned ${fmtAgo(new Date(at).toISOString())}</em>` : `<span class="bar mt-2" aria-hidden="true"><span style="width:${(t.cur / t.max) * 100}%"></span></span><em>${t.cur} / ${t.max}</em>`}</div></li>`;
+  }).join('')}</ul></section>
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
+        <section class="card p-5"><p class="eyebrow mb-1">Recent activity</p>
+          ${act.length ? `<div class="rows">${act.map((a) => `<div class="act-row"><span class="act-ic" aria-hidden="true">${icon(a.icon)}</span><div class="min-w-0 flex-1"><p class="font-semibold text-sm">${esc(a.text)}</p><p class="text-muted text-[13px] truncate">${esc(a.sub)}</p></div><span class="mono text-[12px] text-muted whitespace-nowrap">${fmtAgo(new Date(a.t).toISOString())}</span></div>`).join('')}</div>`
+    : '<p class="text-muted text-sm">Nothing yet. Run the pipeline, solve a drill or handle an incident and it will show up here.</p>'}</section>
+        <section class="card p-5"><p class="eyebrow mb-1">Your data</p>
+          <p class="text-muted text-sm mb-3">Everything lives in this browser: runs, drill scores, incidents, chat, your custom pipeline, preferences and this profile. Download a backup to keep it or move it to another browser.</p>
+          <div class="flex flex-wrap gap-2"><button class="btn btn-outline btn-sm" data-action="backup-export">${icon('download')}<span>Download backup</span></button>
+            <button class="btn btn-outline btn-sm" data-action="backup-import">${icon('up')}<span>Restore backup</span></button>
+            <button class="btn btn-outline btn-sm" data-action="tour-open">${icon('info')}<span>Replay the tour</span></button>
+            <button class="btn btn-outline btn-sm" data-action="nav" data-view="settings">${icon('settings')}<span>Settings</span></button></div>
+          <input id="backup-file" type="file" accept=".json,application/json" hidden aria-label="Choose a backup file to restore"></section>
+      </div>`;
+  }
+
+  function exportBackup() {
+    downloadFile(`deployx-backup-${stamp()}.json`, JSON.stringify({ app: 'deployx', version: 1, exportedAt: new Date().toISOString(), data: Store.state }, null, 2), 'application/json');
+    toast('success', 'Backup downloaded', 'It contains everything stored in this browser.');
+  }
+
+  async function importBackup(file) {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast('error', 'File too large', 'A DeployX backup is well under 5 MB.'); return; }
+    let parsed;
+    try { parsed = JSON.parse(await file.text()); } catch { toast('error', 'Not a backup', 'That file is not valid JSON.'); return; }
+    const data = parsed && parsed.app === 'deployx' ? parsed.data : null;
+    if (!data || typeof data !== 'object' || !Array.isArray(data.history) || !data.prefs || typeof data.prefs !== 'object') {
+      toast('error', 'Not a DeployX backup', 'The file does not look like a backup made by DeployX.');
+      return;
+    }
+    if (App.engine.isRunning) { toast('info', 'Run in progress', 'Wait for the pipeline to finish first.'); return; }
+    const ok = await confirmModal('Restore this backup?', `It replaces everything stored in this browser with ${data.history.length} runs and the saved profile, preferences and chat. This cannot be undone.`, 'Restore', 'primary');
+    if (!ok) return;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch { toast('error', 'Could not restore', 'LocalStorage is unavailable or full.'); return; }
+    location.reload();
+  }
+
   /* --- view switching and full refresh --- */
-  const VIEW_RENDER = { pipelines: renderPipelinesView, deployments: renderDeployments, builds: renderBuilds, environment: renderEnvironments, metrics: renderMetrics, drills: renderDrills, chaos: renderChaos, settings: renderSettings };
+  const VIEW_RENDER = { pipelines: renderPipelinesView, deployments: renderDeployments, builds: renderBuilds, environment: renderEnvironments, metrics: renderMetrics, drills: renderDrills, chaos: renderChaos, profile: renderProfile, settings: renderSettings };
 
   function navigate(view) {
     if (!(view in VIEWS)) return;
     prefs().view = view;
     Store.save();
     $$('.view').forEach((v) => { v.hidden = v.dataset.view !== view; });
-    $$('.nav-item').forEach((b) => (b.dataset.view === view ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
+    $$('.nav-item, .user-card').forEach((b) => (b.dataset.view === view ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
     $('#view-title').textContent = VIEWS[view].title;
     $('#view-sub').textContent = VIEWS[view].sub();
     if (VIEW_RENDER[view]) VIEW_RENDER[view]();
@@ -3107,6 +3323,7 @@ const run = this.run = {
     renderRollout();
     renderIncident();
     renderTourInvite();
+    checkAchievements();
     const view = prefs().view;
     $('#view-sub').textContent = VIEWS[view].sub();
     if (VIEW_RENDER[view]) VIEW_RENDER[view]();
@@ -3181,7 +3398,7 @@ const run = this.run = {
       { icon: 'play', label: 'Run pipeline', hint: 'R', run: () => startRun(), off: running },
       { icon: 'stop', label: 'Cancel running pipeline', hint: 'X', run: () => ACTIONS.cancel(), off: !running },
       { icon: 'retry', label: 'Retry last failed run', hint: 'Shift R', run: () => ACTIONS.retry(), off: !canRetry() },
-      ...Object.keys(VIEWS).map((v, i) => ({ icon: ['overview', 'pipeline', 'deploy', 'history', 'env', 'chart', 'drill', 'bolt', 'settings'][i], label: `Go to ${VIEWS[v].title}`, hint: String(i + 1), run: () => navigate(v) })),
+      ...Object.keys(VIEWS).map((v, i) => ({ icon: ['overview', 'pipeline', 'deploy', 'history', 'env', 'chart', 'drill', 'bolt', 'settings', 'user'][i], label: `Go to ${VIEWS[v].title}`, hint: String(i + 1), run: () => navigate(v) })),
       ...App.envs.map((e) => ({ icon: 'env', label: `Switch environment to ${e.name}`, hint: 'Env', run: () => { setPref('environment', e.id); toast('info', 'Environment selected', `${e.name} (simulated) is the next terminus.`); } })),
       { icon: 'chat', label: chatUI.open ? 'Close ChatOps' : 'Open ChatOps', hint: 'C', run: () => chatToggle() },
       { icon: 'bolt', label: chaos.armed ? 'Disarm chaos mode' : 'Arm chaos mode', hint: 'Chaos', run: () => ACTIONS['chaos-toggle']() },
@@ -3314,6 +3531,8 @@ const run = this.run = {
       renderPipelinesView();
       toast('success', 'Stage added', `${def.name} was added before Deployment. Move it where it belongs, then Apply.`);
     },
+    'backup-export': exportBackup,
+    'backup-import'() { const f = $('#backup-file'); if (f) f.click(); },
     'chat-toggle': chatToggle,
     'chat-ch': (el) => chatChannel(el.dataset.ch),
     'chat-btn': (el) => chatButton(el.dataset.msg, Number(el.dataset.i)),
@@ -3452,6 +3671,8 @@ const run = this.run = {
       Store.wipe();
       seedHistory();
       chatSeed();
+      checkAchievements(true);
+      renderProfileBits();
       chatUI.unread = { deployments: 0, incidents: 0 };
       chatUI.mention = false;
       renderChat();
@@ -3494,6 +3715,9 @@ const run = this.run = {
     });
 
     document.addEventListener('change', (e) => {
+      if (e.target.id === 'backup-file') { importBackup(e.target.files[0]); e.target.value = ''; return; }
+      const pf = e.target.closest('[data-profile]');
+      if (pf) { setProfile(pf.dataset.profile, pf.value); return; }
       const ap = e.target.closest('[data-approver]');
       if (ap) { App.approver = ap.value; renderApproval(); return; }
       const edEl = e.target.closest('[data-ed]');
@@ -3649,6 +3873,8 @@ const run = this.run = {
       sanitizePrefs();
       if (!Store.state.seeded) { seedHistory(); Store.save(); }
       chatSeed();
+      checkAchievements(true); /* silent: badges for existing progress are not announced */
+      renderProfileBits();
 
       App.engine = new PipelineEngine(App.stages);
       App.engine.on('update', (run) => {
